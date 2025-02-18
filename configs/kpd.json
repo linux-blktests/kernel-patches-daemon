@@ -2,43 +2,58 @@
   "version": 3,
   "patchwork": {
     "server": "patchwork.kernel.org",
-    "project": "bpf",
+    "project": "linux-block",
     "search_patterns": [
       {
         "archived": false,
-        "delegate": 77147
+        "project": 241
       }
     ],
+    "api_username": "TO_SPECIFY",
+    "api_token": "TO_SPECIFY",
     "lookback": 7
   },
   "tag_to_branch_mapping": {
-    "bpf": [
-      "bpf"
+    "PULL": [
     ],
-    "bpf-next": [
-      "bpf-next"
+    "blktests": [
+    ],
+    "blktrace": [
+    ],
+    "stable": [
+    ],
+    "for-next": [
+      "for-next"
     ],
     "__DEFAULT__": [
-      "bpf-next",
-      "bpf"
+      "linus-master",
+      "for-next"
     ]
   },
   "branches": {
-    "bpf-next": {
-      "repo": "https://github.com/kernel-patches/bpf",
-      "upstream": "https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf-next.git",
-      "upstream_branch": "master",
-      "ci_repo": "https://github.com/kernel-patches/vmtest.git",
-      "ci_branch": "master",
-      "github_oauth_token": "<TOKEN>"
+    "for-next": {
+      "github_app_auth": {
+        "app_id": "TO_SPECIFY",
+        "installation_id": TO_SPECIFY,
+        "private_key_path": "TO_SPECIFY"
+      },
+      "repo": "https://github.com/linux-blktests/linux-block",
+      "upstream": "https://git.kernel.org/pub/scm/linux/kernel/git/axboe/linux.git",
+      "upstream_branch": "for-next",
+      "ci_repo": "https://github.com/linux-blktests/blktests-kpd-ci.git",
+      "ci_branch": "main"
     },
-    "bpf": {
-      "repo": "https://github.com/kernel-patches/bpf",
-      "upstream": "https://git.kernel.org/pub/scm/linux/kernel/git/bpf/bpf.git",
+    "linus-master": {
+      "github_app_auth": {
+        "app_id": "TO_SPECIFY",
+        "installation_id": TO_SPECIFY,
+        "private_key_path": "TO_SPECIFY"
+      },
+      "repo": "https://github.com/linux-blktests/linux-block",
+      "upstream": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
       "upstream_branch": "master",
-      "ci_repo": "https://github.com/kernel-patches/vmtest.git",
-      "ci_branch": "master",
-      "github_oauth_token": "<TOKEN>"
+      "ci_repo": "https://github.com/linux-blktests/blktests-kpd-ci.git",
+      "ci_branch": "main"
     }
   },
   "base_directory": "/tmp/repos"
