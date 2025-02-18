@@ -94,6 +94,7 @@ class GithubSync(Stats):
             search_patterns=kpd_config.patchwork.search_patterns,
             lookback_in_days=kpd_config.patchwork.lookback,
             auth_token=kpd_config.patchwork.token,
+            certificate_path=kpd_config.certificate_path,
             http_retries=http_retries,
         )
         self.tag_to_branch_mapping = kpd_config.tag_to_branch_mapping

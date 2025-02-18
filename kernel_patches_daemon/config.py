@@ -168,6 +168,7 @@ class KPDConfig:
     branches: Dict[str, BranchConfig]
     tag_to_branch_mapping: Dict[str, List[str]]
     base_directory: str
+    certificate_path: Optional[str]
 
     @classmethod
     def from_json(cls, json: Dict) -> "KPDConfig":
@@ -200,6 +201,7 @@ class KPDConfig:
                 for name, json_config in json["branches"].items()
             },
             base_directory=json["base_directory"],
+            certificate_path=json.get("certificate_path", None),
         )
 
     @classmethod

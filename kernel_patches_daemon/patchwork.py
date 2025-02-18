@@ -11,6 +11,7 @@ import datetime
 import json
 import logging
 import re
+import ssl
 from functools import update_wrapper
 from types import SimpleNamespace
 from typing import Any, AnyStr, Dict, Final, List, Optional, Sequence, Set, Tuple
@@ -506,12 +507,14 @@ class Patchwork:
         server: str,
         search_patterns: List[Dict[str, Any]],
         auth_token: Optional[str] = None,
+        certificate_path: Optional[str] = None,
         lookback_in_days: int = 7,
         api_version: str = "1.2",
         http_retries: int = DEFAULT_HTTP_RETRIES,
     ) -> None:
         self.api_url = f"https://{server}/api/{api_version}/"
         self.auth_token = auth_token
+        self.certificate_path = certificate_path
         if not auth_token:
             logger.warning("Patchwork client runs in read-only mode")
         self.search_patterns = search_patterns
@@ -537,7 +540,11 @@ class Patchwork:
             trace_config.on_request_start.append(on_request_start)
             # pyre-fixme[6]: In call `typing.MutableSequence.append`, for 1st positional argument, expected `_SignalCallback[TraceRequestEndParams]` but got `typing.Callable(on_request_end)[[Named(session, ClientSession), Named(trace_ctx, TraceContext), Named(params, TraceRequestEndParams)], Coroutine[typing.Any, typing.Any, None]]`.
             trace_config.on_request_end.append(on_request_end)
+            ssl_context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_CLIENT)
+            if self.certificate_path:
+                ssl_context.load_verify_locations(self.certificate_path)
             client_session = aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(ssl=ssl_context),
                 trace_configs=[trace_config],
                 # Read proxy from env var
                 trust_env=True,
