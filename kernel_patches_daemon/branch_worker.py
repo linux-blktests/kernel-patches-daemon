@@ -984,10 +984,15 @@ class BranchWorker(GithubConnector):
                 if pr.head.sha == wanted_sha:
                     break
                 logger.info(f"Waiting for {pr} sha={pr.head.sha} to go to {wanted_sha}")
-                await asyncio.sleep(1)
+                await asyncio.sleep(5)
                 pr.update()
             else:
-                raise RuntimeError("Github failed to update PR after force push")
+                self._add_pull_request_comment(
+                    pr,
+                    "Github failed to update this PR after force push. Close it.",
+                )
+                self._close_pr(pr)
+                pr = None
 
             return pr
         # we don't have a branch, also means no PR, push first then create PR
