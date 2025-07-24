@@ -280,16 +280,20 @@ def build_email(
         "curl",
         "--silent",
         "--show-error",
-        "--ssl-reqd",
-        f"smtps://{config.smtp_host}",
         "--mail-from",
         config.smtp_from,
-        "--user",
-        f"{config.smtp_user}:{config.smtp_pass}",
         "--crlf",
         "--upload-file",
         "-",
     ]
+
+    if config.smtp_tls:
+        args += [ "--ssl-reqd", f"smtps://{config.smtp_host}", ]
+    else:
+        args += [ f"smtp://{config.smtp_host}", ]
+
+    if config.smtp_user:
+        args += [ "--user", f"{config.smtp_user}:{config.smtp_pass}", ]
 
     to_list = copy.copy(config.smtp_to)
     cc_list = copy.copy(config.smtp_cc)

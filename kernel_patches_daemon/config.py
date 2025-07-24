@@ -120,15 +120,17 @@ class EmailConfig:
     # Ignore the `submitter_allowlist` entries and send emails to all patch
     # submitters, unconditionally.
     ignore_allowlist: bool
+    # Use smtps, or smtp with SSL/TLS.
+    smtp_tls: bool
 
     @classmethod
     def from_json(cls, json: Dict) -> "EmailConfig":
         return cls(
             smtp_host=json["host"],
             smtp_port=json.get("port", 465),
-            smtp_user=json["user"],
+            smtp_user=json.get("user", None),
             smtp_from=json["from"],
-            smtp_pass=json["pass"],
+            smtp_pass=json.get("pass", None),
             smtp_to=json.get("to", []),
             smtp_cc=json.get("cc", []),
             smtp_http_proxy=json.get("http_proxy", None),
@@ -136,6 +138,7 @@ class EmailConfig:
                 re.compile(pattern) for pattern in json.get("submitter_allowlist", [])
             ],
             ignore_allowlist=json.get("ignore_allowlist", False),
+            smtp_tls=json.get("use_tls", True),
         )
 
 
