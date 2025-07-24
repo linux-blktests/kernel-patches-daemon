@@ -56,5 +56,10 @@
       "ci_branch": "main"
     }
   },
-  "base_directory": "/tmp/repos"
+  "base_directory": "/tmp/repos",
+  "email": {
+    "template_base": "configs/template_base",
+    "template_success": "configs/template_success",
+    "template_failure": "configs/template_failure"
+  }
 }

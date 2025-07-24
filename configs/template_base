@@ -1,0 +1,7 @@
+Dear patch submitter,
+
+Blktests CI has tested the following submission:
+Status:     {status}
+Name:       {submission_name}
+Patchwork:  {pw_series_url}
+{body}
