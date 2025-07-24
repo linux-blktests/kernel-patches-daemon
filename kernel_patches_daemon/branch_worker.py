@@ -91,7 +91,7 @@ MERGE_CONFLICT_LABEL = "merge-conflict"
 UPSTREAM_REMOTE_NAME = "upstream"
 
 
-EMAIL_TEMPLATE_BASE: Final[str] = """\
+EMAIL_TEMPLATE_BASE = """\
 Dear patch submitter,
 
 CI has tested the following submission:
@@ -105,20 +105,20 @@ questions or feedback, please reach out to the Meta Kernel CI team at
 kernel-ci@meta.com.
 """
 
-EMAIL_TEMPLATE_MERGE_CONFLICT_BODY: Final[str] = """\
+EMAIL_TEMPLATE_MERGE_CONFLICT_BODY = """\
 PR:         {github_pr_url}
 
 Please rebase your submission onto the most recent upstream change and resubmit
 the patch to get it tested again.
 """
 
-EMAIL_TEMPLATE_SUCCESS_BODY: Final[str] = """\
+EMAIL_TEMPLATE_SUCCESS_BODY = """\
 Matrix:     {github_actions_url}
 
 No further action is necessary on your part.
 """
 
-EMAIL_TEMPLATE_FAILURE_BODY: Final[str] = """\
+EMAIL_TEMPLATE_FAILURE_BODY = """\
 Matrix:     {github_actions_url}
 
 {inline_logs}\
@@ -210,20 +210,27 @@ def build_email_body_context(
     )
 
 
-def furnish_ci_email_body(ctx: EmailBodyContext) -> str:
+def furnish_ci_email_body(
+        config: EmailConfig,
+        ctx: EmailBodyContext,
+) -> str:
     """Prepare the body of a BPF CI email according to the provided context"""
     if ctx.status == Status.SUCCESS:
-        body = EMAIL_TEMPLATE_SUCCESS_BODY.format(github_actions_url=ctx.github_url)
+        template = config.template_success or EMAIL_TEMPLATE_SUCCESS_BODY
+        body = template.format(github_actions_url=ctx.github_url)
     elif ctx.status == Status.FAILURE:
-        body = EMAIL_TEMPLATE_FAILURE_BODY.format(
+        template = config.template_failure or EMAIL_TEMPLATE_FAILURE_BODY
+        body = template.format(
             inline_logs=ctx.inline_logs,
             github_actions_url=ctx.github_url,
         )
     else:
         assert ctx.status == Status.CONFLICT
-        body = EMAIL_TEMPLATE_MERGE_CONFLICT_BODY.format(github_pr_url=ctx.github_url)
+        template = config.template_merge_conflict or EMAIL_TEMPLATE_MERGE_CONFLICT_BODY
+        body = template.format(github_pr_url=ctx.github_url)
 
-    return EMAIL_TEMPLATE_BASE.format(
+    template = config.template_base or EMAIL_TEMPLATE_BASE
+    return template.format(
         status=str(ctx.status.value).upper(),
         submission_name=ctx.submission_name,
         pw_series_url=ctx.patchwork_url,
@@ -1222,7 +1229,7 @@ class BranchWorker(GithubConnector):
             inline_logs = self.log_extractor.generate_inline_email_text(failed_logs)
             subject = await get_ci_email_subject(series)
             ctx = build_email_body_context(self.repo, pr, status, series, inline_logs)
-            body = furnish_ci_email_body(ctx)
+            body = furnish_ci_email_body(email, ctx)
             await send_email(email, series, subject, body)
             bump_email_status_counters(status)
 

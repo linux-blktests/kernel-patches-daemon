@@ -122,9 +122,30 @@ class EmailConfig:
     ignore_allowlist: bool
     # Use smtps, or smtp with SSL/TLS.
     smtp_tls: bool
+    # Specify the path of a file which contains the template text to build e-
+    # mail body. Refer to EMAIL_TEMPLATE* in 'branch_worker.py'.
+    template_base: str
+    template_merge_conflict: str
+    template_success: str
+    template_failure: str
+
+    @classmethod
+    def read_templates(cls, json: Dict) -> Dict:
+        keys = ("template_base", "template_merge_conflict",
+                "template_success",  "template_failure")
+        templates = {}
+        for key in keys:
+            path = json.get(key, None)
+            value = None
+            if path:
+                with open(path, 'r') as file:
+                    value = file.read()
+            templates.update([(key, value)])
+        return templates
 
     @classmethod
     def from_json(cls, json: Dict) -> "EmailConfig":
+        templates = cls.read_templates(json)
         return cls(
             smtp_host=json["host"],
             smtp_port=json.get("port", 465),
@@ -139,6 +160,10 @@ class EmailConfig:
             ],
             ignore_allowlist=json.get("ignore_allowlist", False),
             smtp_tls=json.get("use_tls", True),
+            template_base=templates["template_base"],
+            template_merge_conflict=templates["template_merge_conflict"],
+            template_success=templates["template_success"],
+            template_failure=templates["template_failure"]
         )
 
 
