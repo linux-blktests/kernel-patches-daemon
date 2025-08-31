@@ -90,6 +90,7 @@ CI_DESCRIPTION = "vmtest"
 MERGE_CONFLICT_LABEL = "merge-conflict"
 UPSTREAM_REMOTE_NAME = "upstream"
 
+UPSTREAM_SYNC_PERIOD = timedelta(days=7)
 
 EMAIL_TEMPLATE_BASE = """\
 Dear patch submitter,
@@ -561,6 +562,7 @@ class BranchWorker(GithubConnector):
         # Most recently used upstream SHA-1. Used to prevent unnecessary pushes
         # if upstream did not change.
         self.upstream_sha = None
+        self.last_sync = None
 
         create_color_labels(labels_cfg, self.repo)
         # member variables
@@ -642,6 +644,10 @@ class BranchWorker(GithubConnector):
         self._update_e2e_pr(title, base_branch, branch_name, pushed)
 
     def do_sync(self) -> None:
+        now = datetime.now(timezone.utc)
+        if self.last_sync and self.last_sync + UPSTREAM_SYNC_PERIOD > now:
+                return
+        self.last_sync = now
         # fetch most recent upstream
         if UPSTREAM_REMOTE_NAME in [x.name for x in self.repo_local.remotes]:
             urls = list(self.repo_local.remote(UPSTREAM_REMOTE_NAME).urls)
@@ -652,6 +658,7 @@ class BranchWorker(GithubConnector):
         else:
             self.repo_local.create_remote(UPSTREAM_REMOTE_NAME, self.upstream_url)
         upstream_repo = self.repo_local.remote(UPSTREAM_REMOTE_NAME)
+        logger.info("Syncing upstream repo")
         upstream_repo.fetch(self.upstream_branch)
         upstream_branch = getattr(upstream_repo.refs, self.upstream_branch)
         _reset_repo(self.repo_local, f"{UPSTREAM_REMOTE_NAME}/{self.upstream_branch}")
