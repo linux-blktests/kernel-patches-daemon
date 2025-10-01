@@ -232,3 +232,115 @@ class BpfGithubLogExtractor(GithubLogExtractor):
             break
 
         return text
+
+class LinuxBlockGithubLogExtractor(GithubLogExtractor):
+    JOB_LOG_BLKTESTS_COMPLETED: Final[str] = "KPD: blktests completed"
+    JOB_LOG_FAILURES_START: Final[str] = "KPD: Failures:"
+    JOB_LOG_FAILURES_END: Final[str] = "exit"
+
+    def __init__(self, certificate_path: str) -> None:
+        # Needs to be initialized in async function
+        self._session: Optional[aiohttp.ClientSession] = None
+        super().__init__(certificate_path)
+
+        return self._session
+
+    async def _extract_job_log(self, job: WorkflowJob) -> Optional[GithubFailedJobLog]:
+        status = gh_conclusion_to_status(job.conclusion)
+        if status != Status.FAILURE:
+            return None
+
+        log = ""
+        url = job.logs_url()
+
+        session = await self._get_session()
+        async with session.get(url) as resp:
+            logger.info(f"Getting logs for {job.name} at {url}")
+            if resp.ok:
+                log = await resp.text()
+            else:
+                logger.warning(f"Failed to GET logs for {job.name}: HTTP {resp.status}")
+
+        return GithubFailedJobLog(
+            suite="None",
+            arch="None",
+            compiler="None",
+            log=log,
+            url=job.html_url,
+        )
+
+    async def extract_failed_logs(
+        self, jobs: Sequence[WorkflowJob]
+    ) -> List[GithubFailedJobLog]:
+        tasks = [asyncio.create_task(self._extract_job_log(job)) for job in jobs]
+        results = await asyncio.gather(*tasks)
+        return [result for result in results if result is not None]
+
+    def _parse_out_test_progs_failure(self, log: str) -> str:
+        # Avoid keeping a duplicate copy of a possibly large file in-memory
+        log_file = io.StringIO(log)
+
+        # Simple state machine track if we're looking at an error message
+        blktests_completed = False
+        in_failures = False
+        failure_log = []
+
+        # Example lines:
+        # 2024-05-21T19:13:45.3877612Z KPD: blktests completed
+        # 2024-05-21T19:13:46.4638076Z KPD: Failures:
+        # 2024-05-21T19:08:07.9400261Z nvme/027
+        # 2024-05-21T19:08:07.9400806Z md/001
+        # 2024-05-21T19:08:07.9401619Z exit status 1
+        for line in log_file:
+            line = line.strip()
+
+            if self.JOB_LOG_BLKTESTS_COMPLETED in line:
+                blktests_completed = True
+                continue
+
+            if self.JOB_LOG_FAILURES_START in line:
+                in_failures = True
+                continue
+
+            if self.JOB_LOG_FAILURES_END in line:
+                in_failures = False
+                continue
+
+            if in_failures:
+                # Remove too short lines
+                if len(line) < 4:
+                    continue
+                # Remove timestamp only lines
+                if line.find(" ") < 0:
+                    continue
+                # Remove timestamp
+                line = line[line.index(" ") + 1 :]
+                failure_log.append(line)
+
+        # If blktests did not complete, do not generate and send out message.
+        if not blktests_completed:
+            return None
+
+        if len(failure_log) > 0:
+            return ' '.join(failure_log)
+        return ""
+
+    def generate_inline_email_text(self, logs: Sequence[GithubFailedJobLog]) -> str:
+        """
+        Given a list of failed job logs, return a (possibly multi-line) string
+        suitable to be embedded in the body of a notification email. The text
+        will try to be conservative -- high signal to email length is important.
+        """
+        if not logs:
+            return ""
+
+        # Render first failures found
+        for log in logs:
+            failures = self._parse_out_test_progs_failure(log.log)
+            if not failures:
+                continue
+
+            logger.info(f"LinuxBlockGithubLogExtractor: log failures: {failures}")
+            return f"\nFailed test cases: {failures}\n"
+
+        return None

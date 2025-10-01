@@ -22,6 +22,7 @@ from kernel_patches_daemon.branch_worker import (
 )
 from kernel_patches_daemon.config import BranchConfig, KPDConfig
 from kernel_patches_daemon.github_logs import (
+    LinuxBlockGithubLogExtractor,
     BpfGithubLogExtractor,
     DefaultGithubLogExtractor,
     GithubLogExtractor,
@@ -79,6 +80,8 @@ def _log_extractor_from_project(project: str,
     """
     if project == "bpf":
         return BpfGithubLogExtractor(certificate_path)
+    elif project == "linux-block":
+        return LinuxBlockGithubLogExtractor(certificate_path)
     else:
         return DefaultGithubLogExtractor(certificate_path)
 
