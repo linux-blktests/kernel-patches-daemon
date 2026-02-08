@@ -229,6 +229,7 @@ def furnish_ci_email_body(
         assert ctx.status == Status.CONFLICT
         template = config.template_merge_conflict or EMAIL_TEMPLATE_MERGE_CONFLICT_BODY
         body = template.format(github_pr_url=ctx.github_url)
+    logger.info(f"creating email body: status={ctx.status} template={template}")
 
     template = config.template_base or EMAIL_TEMPLATE_BASE
     return template.format(
