@@ -10,6 +10,7 @@ import asyncio
 import io
 import logging
 import re
+import ssl
 from abc import ABC, abstractmethod
 from typing import Final, List, Optional, Sequence
 
@@ -55,6 +56,9 @@ class GithubFailedJobLog:
 
 
 class GithubLogExtractor(ABC):
+    def __init__(self, certificate_path: str) -> None:
+        self.certificate_path = certificate_path
+
     @abstractmethod
     async def extract_failed_logs(
         self, jobs: Sequence[WorkflowJob]
@@ -80,12 +84,21 @@ class GithubLogExtractor(ABC):
         """Return cached http session; creating if not already created"""
         if not self._session:
             # Read proxy from env var
-            self._session = aiohttp.ClientSession(trust_env=True)
+            ssl_context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_CLIENT)
+            certs = ssl_context.get_ca_certs()
+            ssl_context.load_verify_locations(self.certificate_path)
+            self._session = aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(ssl=ssl_context),
+                trust_env=True,
+            )
 
         return self._session
 
 
 class DefaultGithubLogExtractor(GithubLogExtractor):
+    def __init__(self, certificate_path: str) -> None:
+        super().__init__(certificate_path)
+
     async def extract_failed_logs(
         self, jobs: Sequence[WorkflowJob]
     ) -> List[GithubFailedJobLog]:
@@ -103,9 +116,10 @@ class BpfGithubLogExtractor(GithubLogExtractor):
     JOB_LOG_ERROR_END: Final[str] = "##[endgroup]"
     JOB_LOG_ERROR_MARKER: Final[str] = "##[error]"
 
-    def __init__(self) -> None:
+    def __init__(self, certificate_path: str) -> None:
         # Needs to be initialized in async function
         self._session: Optional[aiohttp.ClientSession] = None
+        super().__init__(certificate_path)
 
     async def _extract_job_log(self, job: WorkflowJob) -> Optional[GithubFailedJobLog]:
         status = gh_conclusion_to_status(job.conclusion)

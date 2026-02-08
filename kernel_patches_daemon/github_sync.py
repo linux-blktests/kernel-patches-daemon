@@ -69,7 +69,8 @@ def github_app_auth_from_branch_config(
         return None
 
 
-def _log_extractor_from_project(project: str) -> GithubLogExtractor:
+def _log_extractor_from_project(project: str,
+                                certificate_path: str) -> GithubLogExtractor:
     """
     Construct a concrete instance of GithubLogExtractor suitable for
     the patchwork project we're running against. The logs are different
@@ -77,9 +78,9 @@ def _log_extractor_from_project(project: str) -> GithubLogExtractor:
     this abstraction.
     """
     if project == "bpf":
-        return BpfGithubLogExtractor()
+        return BpfGithubLogExtractor(certificate_path)
     else:
-        return DefaultGithubLogExtractor()
+        return DefaultGithubLogExtractor(certificate_path)
 
 
 class GithubSync(Stats):
@@ -108,7 +109,8 @@ class GithubSync(Stats):
                 upstream_branch=branch_config.upstream_branch,
                 ci_repo_url=branch_config.ci_repo,
                 ci_branch=branch_config.ci_branch,
-                log_extractor=_log_extractor_from_project(kpd_config.patchwork.project),
+                log_extractor=_log_extractor_from_project(kpd_config.patchwork.project,
+                                                          kpd_config.certificate_path),
                 base_directory=kpd_config.base_directory,
                 http_retries=http_retries,
                 github_oauth_token=branch_config.github_oauth_token,
