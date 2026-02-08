@@ -76,6 +76,14 @@ class GithubLogExtractor(ABC):
         """
         raise NotImplementedError
 
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Return cached http session; creating if not already created"""
+        if not self._session:
+            # Read proxy from env var
+            self._session = aiohttp.ClientSession(trust_env=True)
+
+        return self._session
+
 
 class DefaultGithubLogExtractor(GithubLogExtractor):
     async def extract_failed_logs(
@@ -98,14 +106,6 @@ class BpfGithubLogExtractor(GithubLogExtractor):
     def __init__(self) -> None:
         # Needs to be initialized in async function
         self._session: Optional[aiohttp.ClientSession] = None
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Return cached http session; creating if not already created"""
-        if not self._session:
-            # Read proxy from env var
-            self._session = aiohttp.ClientSession(trust_env=True)
-
-        return self._session
 
     async def _extract_job_log(self, job: WorkflowJob) -> Optional[GithubFailedJobLog]:
         status = gh_conclusion_to_status(job.conclusion)
