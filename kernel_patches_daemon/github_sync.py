@@ -187,7 +187,7 @@ class GithubSync(Stats):
             return pr
         except NewPRWithNoChangeException as e:
             self.increment_counter("empty_pr")
-            logger.exception(
+            logger.info(
                 f"Could not create PR for series {series_to_apply.id} merging {e.base_branch} into {e.target_branch} as PR would introduce no changes"
             )
             return None
