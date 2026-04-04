@@ -1110,7 +1110,11 @@ class BranchWorker(GithubConnector):
     async def sync_checks(self, pr: PullRequest, series: Series) -> None:
         # Make sure that we are working with up-to-date data (as opposed to
         # cached state).
-        pr.update()
+        try:
+            pr.update()
+        except GithubException as e:
+            logger.warning(f"PullRequest update failed {e}")
+            return
         # if it's merge conflict - report failure
         ctx = BranchWorker.slugify_context(f"{CI_DESCRIPTION}-{self.repo_branch}")
         if _is_pr_flagged(pr):
