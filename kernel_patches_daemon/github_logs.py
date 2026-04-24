@@ -323,7 +323,7 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
 
         if len(failure_log) > 0:
             return ' '.join(failure_log)
-        return ""
+        return "ALL PASS"
 
     def generate_inline_email_text(self, logs: Sequence[GithubFailedJobLog]) -> str:
         """
@@ -339,6 +339,9 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
             failures = self._parse_out_test_progs_failure(log.log)
             if not failures:
                 continue
+            elif failures == "ALL PASS":
+                logger.info(f"LinuxBlockGithubLogExtractor: log ALL PASS")
+                return f"\nAll test cases passed\n"
 
             logger.info(f"LinuxBlockGithubLogExtractor: log failures: {failures}")
             return f"\nFailed test cases: {failures}\n"
