@@ -128,6 +128,8 @@ class EmailConfig:
     template_merge_conflict: str
     template_success: str
     template_failure: str
+    # If send out e-mail on success
+    report_success: bool
 
     @classmethod
     def read_templates(cls, json: Dict) -> Dict:
@@ -163,7 +165,8 @@ class EmailConfig:
             template_base=templates["template_base"],
             template_merge_conflict=templates["template_merge_conflict"],
             template_success=templates["template_success"],
-            template_failure=templates["template_failure"]
+            template_failure=templates["template_failure"],
+            report_success=json.get("report_success", False)
         )
 
 

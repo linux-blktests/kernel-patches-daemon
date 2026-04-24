@@ -1243,6 +1243,8 @@ class BranchWorker(GithubConnector):
             if not inline_logs:
                 logger.info(f"None returned from log_extractor. Do not send e-mail.")
                 return
+            if status == Status.SUCCESS and not config.report_success:
+                return
             subject = await get_ci_email_subject(series)
             ctx = build_email_body_context(self.repo, pr, status, series, inline_logs)
             body = furnish_ci_email_body(email, ctx)
