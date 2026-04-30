@@ -284,6 +284,7 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
         blktests_completed = False
         in_failures = False
         failure_log = []
+        header_pattern = re.compile('^[0-9]+-[0-9]+-[0-9]+')
 
         # Example lines:
         # 2024-05-21T19:13:45.3877612Z KPD: blktests completed
@@ -294,8 +295,15 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
         for line in log_file:
             line = line.strip()
 
+            # Skip if the line does not have the timestamp header.
+            # This is required because the multi-line log may include
+            # the script that has the self.JOB_* keywords.
+            if not header_pattern.match(line):
+                continue
+
             if self.JOB_LOG_BLKTESTS_COMPLETED in line:
                 blktests_completed = True
+                logger.info(f"Setting blktests_completed: {line}")
                 continue
 
             if self.JOB_LOG_FAILURES_START in line:
@@ -319,6 +327,7 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
 
         # If blktests did not complete, do not generate and send out message.
         if not blktests_completed:
+            logger.info(f"blktests_completed is not set")
             return None
 
         if len(failure_log) > 0:
