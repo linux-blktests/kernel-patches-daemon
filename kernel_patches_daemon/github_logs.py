@@ -236,7 +236,7 @@ class BpfGithubLogExtractor(GithubLogExtractor):
 class LinuxBlockGithubLogExtractor(GithubLogExtractor):
     JOB_LOG_BLKTESTS_COMPLETED: Final[str] = "KPD: blktests completed"
     JOB_LOG_FAILURES_START: Final[str] = "KPD: Failures:"
-    JOB_LOG_FAILURES_END: Final[str] = "exit"
+    JOB_LOG_FAILURES_END: Final[str] = "KPD: Failures end"
 
     def __init__(self, certificate_path: str) -> None:
         # Needs to be initialized in async function
@@ -291,7 +291,7 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
         # 2024-05-21T19:13:46.4638076Z KPD: Failures:
         # 2024-05-21T19:08:07.9400261Z nvme/027
         # 2024-05-21T19:08:07.9400806Z md/001
-        # 2024-05-21T19:08:07.9401619Z exit status 1
+        # 2024-05-21T19:08:07.9401619Z KPD: Failures end
         for line in log_file:
             line = line.strip()
 
