@@ -1,0 +1,63 @@
+{
+  "version": 3,
+  "patchwork": {
+    "server": "patchwork.kernel.org",
+    "project": "linux-nvme",
+    "search_patterns": [
+      {
+        "archived": false,
+        "project": 434
+      }
+    ],
+    "api_username": "TO_SPECIFY",
+    "api_token": "TO_SPECIFY",
+    "lookback": 7
+  },
+  "tag_to_branch_mapping": {
+    "PULL": [
+    ],
+    "blktests": [
+    ],
+    "stable": [
+    ],
+    "for-next": [
+      "for-next"
+    ],
+    "__DEFAULT__": [
+      "linus-master",
+      "for-next"
+    ]
+  },
+  "branches": {
+    "for-next": {
+      "github_app_auth": {
+        "app_id": "TO_SPECIFY",
+        "installation_id": TO_SPECIFY,
+        "private_key_path": "TO_SPECIFY"
+      },
+      "repo": "https://github.com/linux-blktests/linux-nvme",
+      "upstream": "git://git.infradead.org/nvme.git",
+      "upstream_branch": "for-next",
+      "ci_repo": "https://github.com/linux-blktests/blktests-kpd-ci.git",
+      "ci_branch": "nvme"
+    },
+    "linus-master": {
+      "github_app_auth": {
+        "app_id": "TO_SPECIFY",
+        "installation_id": TO_SPECIFY,
+        "private_key_path": "TO_SPECIFY"
+      },
+      "repo": "https://github.com/linux-blktests/linux-nvme",
+      "upstream": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
+      "upstream_branch": "master",
+      "ci_repo": "https://github.com/linux-blktests/blktests-kpd-ci.git",
+      "ci_branch": "nvme"
+    }
+  },
+  "base_directory": "/tmp/nvme_repos",
+  "email": {
+    "template_base": "configs/template_base",
+    "template_success": "configs/template_success",
+    "template_failure": "configs/template_failure"
+  }
+}
