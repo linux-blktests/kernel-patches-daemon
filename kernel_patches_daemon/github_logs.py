@@ -301,16 +301,16 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
             if not header_pattern.match(line):
                 continue
 
-            if self.JOB_LOG_BLKTESTS_COMPLETED in line:
+            if self.JOB_LOG_BLKTESTS_COMPLETED in line and not "echo" in line:
                 blktests_completed = True
                 logger.info(f"Setting blktests_completed: {line}")
                 continue
 
-            if self.JOB_LOG_FAILURES_START in line:
+            if self.JOB_LOG_FAILURES_START in line and not "echo" in line:
                 in_failures = True
                 continue
 
-            if self.JOB_LOG_FAILURES_END in line:
+            if self.JOB_LOG_FAILURES_END in line and not "echo" in line:
                 in_failures = False
                 continue
 
