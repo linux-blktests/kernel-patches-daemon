@@ -20,16 +20,12 @@
     ],
     "stable": [
     ],
-    "for-next": [
-      "for-next"
-    ],
     "__DEFAULT__": [
-      "linus-master",
-      "for-next"
+      "nvme-7.3"
     ]
   },
   "branches": {
-    "for-next": {
+    "nvme-7.3": {
       "github_app_auth": {
         "app_id": "TO_SPECIFY",
         "installation_id": TO_SPECIFY,
@@ -37,21 +33,9 @@
       },
       "repo": "https://github.com/linux-blktests/linux-nvme",
       "upstream": "git://git.infradead.org/nvme.git",
-      "upstream_branch": "for-next",
+      "upstream_branch": "nvme-7.3",
       "ci_repo": "https://github.com/linux-blktests/blktests-kpd-ci.git",
-      "ci_branch": "nvme"
-    },
-    "linus-master": {
-      "github_app_auth": {
-        "app_id": "TO_SPECIFY",
-        "installation_id": TO_SPECIFY,
-        "private_key_path": "TO_SPECIFY"
-      },
-      "repo": "https://github.com/linux-blktests/linux-nvme",
-      "upstream": "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git",
-      "upstream_branch": "master",
-      "ci_repo": "https://github.com/linux-blktests/blktests-kpd-ci.git",
-      "ci_branch": "nvme"
+      "ci_branch": "linux-nvme"
     }
   },
   "base_directory": "/tmp/nvme_repos",
