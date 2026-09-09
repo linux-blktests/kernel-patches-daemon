@@ -20,8 +20,9 @@ from kernel_patches_daemon.branch_worker import (
     HEAD_BASE_SEPARATOR,
     NewPRWithNoChangeException,
 )
-from kernel_patches_daemon.config import BranchConfig, KPDConfig
+from kernel_patches_daemon.config import BranchConfig, InvalidConfig, KPDConfig
 from kernel_patches_daemon.github_logs import (
+    GITHUB_LOG_EXTRACTORS,
     LinuxBlockGithubLogExtractor,
     BpfGithubLogExtractor,
     DefaultGithubLogExtractor,
@@ -86,6 +87,33 @@ def _log_extractor_from_project(project: str,
         return DefaultGithubLogExtractor(certificate_path)
 
 
+def _log_extractor_from_config(kpd_config: KPDConfig) -> GithubLogExtractor:
+    """
+    Construct the GithubLogExtractor named by the `log_extractor` config
+    option, falling back to guessing from the patchwork project when it is
+    unset.
+
+    How a job log parses is decided by the CI workflow that produced it, not by
+    the mailing list the series came from, so the patchwork project can only
+    ever be a guess. Guessing does not scale: every further list tested by an
+    existing CI would have to be added to _log_extractor_from_project by hand,
+    and until it is, the tree silently gets DefaultGithubLogExtractor, which
+    finds no failures and so suppresses the notification e-mail entirely.
+    Naming the extractor in the config keeps adopting a list out of this
+    repository.
+    """
+    if (name := kpd_config.log_extractor) is None:
+        return _log_extractor_from_project(
+            kpd_config.patchwork.project, kpd_config.certificate_path
+        )
+    if name not in GITHUB_LOG_EXTRACTORS:
+        raise InvalidConfig(
+            f"Unknown log_extractor '{name}', expected one of "
+            f"{sorted(GITHUB_LOG_EXTRACTORS)}"
+        )
+    return GITHUB_LOG_EXTRACTORS[name](kpd_config.certificate_path)
+
+
 class GithubSync(Stats):
     def __init__(
         self,
@@ -112,8 +140,7 @@ class GithubSync(Stats):
                 upstream_branch=branch_config.upstream_branch,
                 ci_repo_url=branch_config.ci_repo,
                 ci_branch=branch_config.ci_branch,
-                log_extractor=_log_extractor_from_project(kpd_config.patchwork.project,
-                                                          kpd_config.certificate_path),
+                log_extractor=_log_extractor_from_config(kpd_config),
                 base_directory=kpd_config.base_directory,
                 http_retries=http_retries,
                 github_oauth_token=branch_config.github_oauth_token,

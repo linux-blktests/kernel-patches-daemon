@@ -200,6 +200,9 @@ class KPDConfig:
     tag_to_branch_mapping: Dict[str, List[str]]
     base_directory: str
     certificate_path: Optional[str]
+    # Name of the GithubLogExtractor to parse CI job logs with, see
+    # GITHUB_LOG_EXTRACTORS. Unset means guess from the patchwork project.
+    log_extractor: Optional[str] = None
 
     @classmethod
     def from_json(cls, json: Dict) -> "KPDConfig":
@@ -233,6 +236,7 @@ class KPDConfig:
             },
             base_directory=json["base_directory"],
             certificate_path=json.get("certificate_path", None),
+            log_extractor=json.get("log_extractor", None),
         )
 
     @classmethod
