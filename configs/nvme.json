@@ -39,6 +39,7 @@
     }
   },
   "base_directory": "/tmp/nvme_repos",
+  "log_extractor": "blktests",
   "email": {
     "template_base": "configs/template_base",
     "template_success": "configs/template_success",

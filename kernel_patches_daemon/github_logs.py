@@ -12,7 +12,7 @@ import logging
 import re
 import ssl
 from abc import ABC, abstractmethod
-from typing import Final, List, Optional, Sequence
+from typing import Dict, Final, List, Optional, Sequence, Type
 
 import aiohttp
 from github.WorkflowJob import WorkflowJob
@@ -356,3 +356,14 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
             return f"\nFailed test cases: {failures}\n"
 
         return None
+
+
+# Values accepted by the `log_extractor` config option. The key names the CI
+# that produced the logs rather than the tree being tested, because that is
+# what decides how they parse: every mailing list whose series are tested by
+# blktests wants "blktests", whatever the list is called.
+GITHUB_LOG_EXTRACTORS: Final[Dict[str, Type[GithubLogExtractor]]] = {
+    "blktests": LinuxBlockGithubLogExtractor,
+    "bpf": BpfGithubLogExtractor,
+    "default": DefaultGithubLogExtractor,
+}
