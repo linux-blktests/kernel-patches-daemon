@@ -15,11 +15,11 @@ RUN touch README.md
 RUN poetry install --without dev --no-root && rm -rf $POETRY_CACHE_DIR
 
 # The runtime image, used to just run the code provided its virtual environment
-FROM python:3.10-slim-buster as runtime
+FROM python:3.10-slim-bookworm as runtime
 LABEL maintainer="Nikolay Yurin <yurinnick@meta.com>"
 
 RUN apt update && \
-    apt install -y git && \
+    apt install -y git curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
