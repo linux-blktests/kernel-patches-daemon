@@ -639,7 +639,7 @@ class BranchWorker(GithubConnector):
         if branch_name not in self.branches or self.repo_local.git.diff(
             branch_name, f"remotes/origin/{branch_name}"
         ):
-            self.repo_local.git.push("--force", "origin", branch_name)
+            self._push_to_origin(branch_name)
             pushed = True
 
         self._update_e2e_pr(title, base_branch, branch_name, pushed)
@@ -663,9 +663,7 @@ class BranchWorker(GithubConnector):
         upstream_repo.fetch(self.upstream_branch)
         upstream_branch = getattr(upstream_repo.refs, self.upstream_branch)
         _reset_repo(self.repo_local, f"{UPSTREAM_REMOTE_NAME}/{self.upstream_branch}")
-        self.repo_local.git.push(
-            "--force", "origin", f"{upstream_branch}:refs/heads/{self.repo_branch}"
-        )
+        self._push_to_origin(f"{upstream_branch}:refs/heads/{self.repo_branch}")
         self.upstream_sha = upstream_branch.object.hexsha
 
     def full_sync(self, path: str, url: str, branch: str) -> git.Repo:
@@ -732,7 +730,7 @@ class BranchWorker(GithubConnector):
 
         if diff:
             self.repo_local.git.checkout("-B", base_branch)
-            self.repo_local.git.push("--force", "origin", f"refs/heads/{base_branch}")
+            self._push_to_origin(f"refs/heads/{base_branch}")
         else:
             self.repo_local.git.checkout("-B", base_branch, f"origin/{base_branch}")
 
@@ -743,7 +741,15 @@ class BranchWorker(GithubConnector):
         _reset_repo(self.repo_local, f"{UPSTREAM_REMOTE_NAME}/{self.upstream_branch}")
         self.repo_local.git.checkout("-B", branch_name)
         self.repo_local.git.commit("--allow-empty", "--message", "Dummy commit")
-        self.repo_local.git.push("--force", "origin", branch_name)
+        self._push_to_origin(branch_name)
+
+    def _push_to_origin(self, refspec: str) -> None:
+        """
+        Force push refspec to origin, refreshing the origin URL first so that
+        a GH app token embedded in it has not expired during a long run.
+        """
+        self.repo_local.remote(name="origin").set_url(self.repo_url)
+        self.repo_local.git.push("--force", "origin", refspec)
 
     def _close_pr(self, pr: PullRequest) -> None:
         pr.edit(state="closed")
@@ -994,7 +1000,7 @@ class BranchWorker(GithubConnector):
                 can_create=True,
             )
             assert pr
-            self.repo_local.git.push("--force", "origin", branch_name)
+            self._push_to_origin(branch_name)
 
             # Metadata inside `pr` may be stale from the force push; refresh it
             pr.update()
@@ -1019,7 +1025,7 @@ class BranchWorker(GithubConnector):
             if not self.repo_local.git.diff(self.repo_pr_base_branch, branch_name):
                 # raise an exception so it bubbles up to the caller.
                 raise NewPRWithNoChangeException(self.repo_pr_base_branch, branch_name)
-            self.repo_local.git.push("--force", "origin", branch_name)
+            self._push_to_origin(branch_name)
             return await self._comment_series_pr(
                 series,
                 message=comment,

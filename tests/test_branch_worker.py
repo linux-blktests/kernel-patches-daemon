@@ -265,8 +265,14 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
             )
 
             lr.delete_remote.assert_not_called()
-            # After having created the remote, we access it.
-            lr.remote.assert_called_once_with(UPSTREAM_REMOTE_NAME)
+            # After having created the remote, we access it, then origin to push.
+            self.assertEqual(
+                lr.remote.call_args_list,
+                [
+                    unittest.mock.call(UPSTREAM_REMOTE_NAME),
+                    unittest.mock.call(name="origin"),
+                ],
+            )
 
     def test_do_sync_recreate_remote_when_changed(self) -> None:
         """
@@ -294,9 +300,10 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
             )
 
             lr.delete_remote.assert_called_once_with(UPSTREAM_REMOTE_NAME)
-            # We access the remote twice.
-            self.assertEqual(2, lr.remote.call_count)
-            lr.remote.assert_called_with(UPSTREAM_REMOTE_NAME)
+            # We access the upstream remote twice, and origin once to push.
+            self.assertEqual(3, lr.remote.call_count)
+            lr.remote.assert_any_call(UPSTREAM_REMOTE_NAME)
+            lr.remote.assert_called_with(name="origin")
 
     def test_do_sync_no_remote_modification(self) -> None:
         """
@@ -319,9 +326,10 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
             self._bw.do_sync()
             lr.create_remote.assert_not_called()
             lr.delete_remote.assert_not_called()
-            # We access the remote twice.
-            self.assertEqual(2, lr.remote.call_count)
-            lr.remote.assert_called_with(UPSTREAM_REMOTE_NAME)
+            # We access the upstream remote twice, and origin once to push.
+            self.assertEqual(3, lr.remote.call_count)
+            lr.remote.assert_any_call(UPSTREAM_REMOTE_NAME)
+            lr.remote.assert_called_with(name="origin")
 
     def test_do_sync_reset_repo(self) -> None:
         with patch.object(self._bw, "repo_local") as lr, patch(
@@ -339,6 +347,31 @@ class TestBranchWorker(unittest.IsolatedAsyncioTestCase):
             # and pushed from upstream_url to downstream
             lr.git.push.assert_called_once_with(
                 "--force", "origin", f"{remote_ref}:refs/heads/{TEST_REPO_BRANCH}"
+            )
+
+    def test_push_to_origin_refreshes_url(self) -> None:
+        """
+        The origin URL is refreshed right before pushing, so that a GH app
+        token embedded in it does not expire during a long run.
+        """
+        with patch.object(self._bw, "repo_local") as lr, patch.object(
+            BranchWorker, "repo_url", "https://user:fresh_token@example.com/repo"
+        ):
+            calls = MagicMock()
+            calls.attach_mock(lr.remote.return_value.set_url, "set_url")
+            calls.attach_mock(lr.git.push, "push")
+
+            self._bw._push_to_origin("some-branch")
+
+            lr.remote.assert_called_once_with(name="origin")
+            self.assertEqual(
+                calls.mock_calls,
+                [
+                    unittest.mock.call.set_url(
+                        "https://user:fresh_token@example.com/repo"
+                    ),
+                    unittest.mock.call.push("--force", "origin", "some-branch"),
+                ],
             )
 
     def test_relevant_pr(self) -> None:
