@@ -15,7 +15,7 @@ import unittest
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import git
 
@@ -31,6 +31,8 @@ from kernel_patches_daemon.branch_worker import (
     BranchWorker,
     build_email,
     create_color_labels,
+    EMAIL_TEMPLATE_BASE,
+    EMAIL_TEMPLATE_MAINTAINER_BASE,
     email_in_submitter_allowlist,
     EmailBodyContext,
     furnish_ci_email_body,
@@ -40,7 +42,11 @@ from kernel_patches_daemon.branch_worker import (
     UPSTREAM_REMOTE_NAME,
 )
 from kernel_patches_daemon.config import EmailConfig
-from kernel_patches_daemon.github_logs import DefaultGithubLogExtractor
+from kernel_patches_daemon.github_logs import (
+    DefaultGithubLogExtractor,
+    GithubFailedJobLog,
+    LinuxBlockGithubLogExtractor,
+)
 from kernel_patches_daemon.patchwork import Series, Subject
 from kernel_patches_daemon.status import Status
 from munch import Munch, munchify
@@ -106,6 +112,29 @@ SERIES_DATA: Dict[str, Any] = {
 }
 
 
+def make_test_email_config(
+    smtp_to: List[str], smtp_cc: List[str], ignore_allowlist: bool = True
+) -> EmailConfig:
+    return EmailConfig(
+        smtp_host="mail.example.com",
+        smtp_port=465,
+        smtp_user="",
+        smtp_from="bot@example.com",
+        smtp_pass="",
+        smtp_to=smtp_to,
+        smtp_cc=smtp_cc,
+        smtp_http_proxy=None,
+        submitter_allowlist=[],
+        ignore_allowlist=ignore_allowlist,
+        smtp_tls=False,
+        template_base=None,
+        template_merge_conflict=None,
+        template_success=None,
+        template_failure=None,
+        report_success=False,
+    )
+
+
 class BranchWorkerMock(BranchWorker):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         presets = {
@@ -118,7 +147,7 @@ class BranchWorkerMock(BranchWorker):
             "upstream_branch": TEST_UPSTREAM_BRANCH,
             "ci_repo_url": TEST_CI_REPO_URL,
             "ci_branch": TEST_CI_BRANCH,
-            "log_extractor": DefaultGithubLogExtractor(),
+            "log_extractor": DefaultGithubLogExtractor(certificate_path=""),
             "base_directory": TEST_BASE_DIRECTORY,
         }
         presets.update(kwargs)
@@ -1179,12 +1208,64 @@ class TestEmailNotificationBody(unittest.TestCase):
 
         self.assertEqual(expected, body)
 
+    def test_email_body_for_maintainers(self):
+        config = make_test_email_config(["maintainer@example.com"], [])
+        ctx = EmailBodyContext(
+            status=Status.FAILURE,
+            submission_name="submission",
+            patchwork_url="https://patchwork.example.com/series",
+            github_url="https://github.com/o/r/actions/runs/1",
+            inline_logs="",
+        )
+
+        body = furnish_ci_email_body(config, ctx, notify_submitter=False)
+        default_body = furnish_ci_email_body(config, ctx)
+
+        self.assertTrue(body.startswith(EMAIL_TEMPLATE_MAINTAINER_BASE.splitlines()[0]))
+        self.assertNotIn("Dear patch submitter", body)
+        self.assertTrue(default_body.startswith(EMAIL_TEMPLATE_BASE.splitlines()[0]))
+
 
 class TestEmailNotification(unittest.TestCase):
     # Fully expand all diffs
     maxDiff = None
 
     BOUNDARY = "================asdf"
+
+    def test_email_maintainers_only(self):
+        series = Series(get_default_pw_client(), SERIES_DATA)
+        config = make_test_email_config(
+            ["email1-to@example.com", "email2-to@example.com"],
+            ["email1-cc@example.com", "email2-cc@example.com"],
+        )
+
+        cmd, message = build_email(
+            config,
+            series,
+            "my subject",
+            "my-id",
+            "body",
+            boundary=self.BOUNDARY,
+            notify_submitter=False,
+        )
+        recipients = [
+            cmd[index + 1]
+            for index, argument in enumerate(cmd[:-1])
+            if argument == "--mail-rcpt"
+        ]
+
+        self.assertEqual(
+            [
+                "email1-to@example.com",
+                "email2-to@example.com",
+                "email1-cc@example.com",
+                "email2-cc@example.com",
+            ],
+            recipients,
+        )
+        self.assertNotIn("a-user@example.com", message)
+        self.assertIn("To: email1-to@example.com,email2-to@example.com", message)
+        self.assertIn("Cc: email1-cc@example.com,email2-cc@example.com", message)
 
     def test_allowlist_non_regex(self):
         allowlist = [
@@ -1393,3 +1474,82 @@ class TestEmailNotification(unittest.TestCase):
         )
         self.assertEqual(expected_cmd, cmd)
         self.assertEqual(expected_email, email)
+
+
+class TestEvaluateCIResultEmailRouting(unittest.IsolatedAsyncioTestCase):
+    def _log(self, lines):
+        return GithubFailedJobLog(
+            suite="None",
+            arch="None",
+            compiler="None",
+            log="\n".join(lines),
+            url="https://github.com/o/r/actions/runs/1/job/2",
+        )
+
+    async def _evaluate(self, logs, smtp_to, smtp_cc):
+        email = make_test_email_config(smtp_to, smtp_cc)
+        extractor = LinuxBlockGithubLogExtractor(certificate_path="")
+        with patch("kernel_patches_daemon.github_connector.Github"):
+            worker = BranchWorkerMock(email=email, log_extractor=extractor)
+
+        pr = MagicMock()
+        pr.labels = []
+        series = Series(get_default_pw_client(), SERIES_DATA)
+        ctx = EmailBodyContext(
+            status=Status.FAILURE,
+            submission_name="submission",
+            patchwork_url="https://patchwork.example.com/series",
+            github_url="https://github.com/o/r/actions/runs/1",
+            inline_logs="",
+        )
+        with patch.object(
+            extractor,
+            "extract_failed_logs",
+            new=AsyncMock(return_value=logs),
+        ), patch(
+            "kernel_patches_daemon.branch_worker.get_ci_email_subject",
+            new=AsyncMock(return_value="subject"),
+        ), patch(
+            "kernel_patches_daemon.branch_worker.build_email_body_context",
+            return_value=ctx,
+        ), patch(
+            "kernel_patches_daemon.branch_worker.send_email",
+            new=AsyncMock(),
+        ) as send:
+            await worker.evaluate_ci_result(Status.FAILURE, series, pr, [])
+
+        return send
+
+    async def test_not_completed_log_does_not_notify_submitter(self):
+        log = self._log(
+            ['2026-11-08T09:49:50.8176794Z echo "KPD: blktests completed"']
+        )
+
+        send = await self._evaluate([log], ["maintainer@example.com"], [])
+
+        send.assert_awaited_once()
+        self.assertFalse(send.await_args.kwargs["notify_submitter"])
+
+    async def test_failed_test_log_notifies_submitter(self):
+        log = self._log(
+            [
+                "2026-11-08T09:50:30.7063602Z KPD: blktests completed",
+                "2026-11-08T09:50:31.7063602Z KPD: Failures:",
+                "2026-11-08T09:50:32.7063602Z block/001",
+                "2026-11-08T09:50:33.7063602Z KPD: Failures end",
+            ]
+        )
+
+        send = await self._evaluate([log], ["maintainer@example.com"], [])
+
+        send.assert_awaited_once()
+        self.assertTrue(send.await_args.kwargs["notify_submitter"])
+
+    async def test_no_recipients_skips_email_without_failed_test(self):
+        log = self._log(
+            ['2026-11-08T09:49:50.8176794Z echo "KPD: blktests completed"']
+        )
+
+        send = await self._evaluate([log], [], [])
+
+        send.assert_not_awaited()

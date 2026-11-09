@@ -11,7 +11,12 @@ import unittest
 from aioresponses import aioresponses
 from github.WorkflowJob import WorkflowJob
 
-from kernel_patches_daemon.github_logs import BpfGithubLogExtractor, GithubFailedJobLog
+from kernel_patches_daemon.github_logs import (
+    BpfGithubLogExtractor,
+    DefaultGithubLogExtractor,
+    GithubFailedJobLog,
+    LinuxBlockGithubLogExtractor,
+)
 
 from . import read_fixture
 
@@ -258,3 +263,94 @@ class TestBpfGithubLogs(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(expected, output)
+
+
+class TestLinuxBlockGithubLogs(unittest.TestCase):
+    def setUp(self) -> None:
+        self.extractor = LinuxBlockGithubLogExtractor(certificate_path="")
+
+    def _log(self, lines):
+        return GithubFailedJobLog(
+            suite="None",
+            arch="None",
+            compiler="None",
+            log="\n".join(lines),
+            url="https://github.com/o/r/actions/runs/1/job/2",
+        )
+
+    def _script_lines(self):
+        return [
+            '2026-11-08T09:49:50.8176794Z echo "KPD: blktests completed"',
+            '2026-11-08T09:49:50.8176794Z test -f all_failures && echo "KPD: Failures:"',
+            '2026-11-08T09:49:50.8176794Z test -f all_failures && echo "KPD: Failures end"',
+        ]
+
+    def test_failed_tests(self):
+        log = self._log(
+            self._script_lines()
+            + [
+                "2026-11-08T09:50:30.7063602Z KPD: blktests completed",
+                "2026-11-08T09:50:31.7063602Z KPD: Failures:",
+                "2026-11-08T09:50:32.7063602Z block/001 nvme/027",
+                "2026-11-08T09:50:33.7063602Z ",
+                "2026-11-08T09:50:34.7063602Z KPD: Failures end",
+            ]
+        )
+
+        self.assertEqual(
+            "\nFailed test cases: block/001 nvme/027\n",
+            self.extractor.generate_inline_email_text([log]),
+        )
+        self.assertTrue(self.extractor.notify_submitter([log]))
+
+    def test_completed_without_failed_tests(self):
+        log = self._log(
+            self._script_lines()
+            + ["2026-11-08T09:50:30.7063602Z KPD: blktests completed"]
+        )
+        text = self.extractor.generate_inline_email_text([log])
+
+        self.assertEqual(LinuxBlockGithubLogExtractor.EMAIL_TEXT_NO_FAILED_TESTS, text)
+        self.assertFalse(self.extractor.notify_submitter([log]))
+        self.assertNotIn("All test cases passed", text)
+
+    def test_blktests_not_completed(self):
+        log = self._log(self._script_lines())
+
+        self.assertEqual(
+            LinuxBlockGithubLogExtractor.EMAIL_TEXT_NOT_COMPLETED,
+            self.extractor.generate_inline_email_text([log]),
+        )
+        self.assertFalse(self.extractor.notify_submitter([log]))
+
+    def test_no_logs(self):
+        self.assertEqual("", self.extractor.generate_inline_email_text([]))
+
+    def test_failures_across_multiple_logs(self):
+        completed_without_failures = self._log(
+            ["2026-11-08T09:50:30.7063602Z KPD: blktests completed"]
+        )
+        with_failures = self._log(
+            [
+                "2026-11-08T09:50:30.7063602Z KPD: blktests completed",
+                "2026-11-08T09:50:31.7063602Z KPD: Failures:",
+                "2026-11-08T09:50:32.7063602Z block/001 nvme/027",
+                "2026-11-08T09:50:33.7063602Z KPD: Failures end",
+            ]
+        )
+
+        self.assertEqual(
+            "\nFailed test cases: block/001 nvme/027\n",
+            self.extractor.generate_inline_email_text(
+                [completed_without_failures, with_failures]
+            ),
+        )
+        self.assertTrue(
+            self.extractor.notify_submitter([completed_without_failures, with_failures])
+        )
+
+    def test_default_extractor_notifies_submitter(self):
+        log = self._log([])
+        extractor = DefaultGithubLogExtractor(certificate_path="")
+
+        self.assertTrue(extractor.notify_submitter([log]))

@@ -106,6 +106,16 @@ questions or feedback, please reach out to the Meta Kernel CI team at
 kernel-ci@meta.com.
 """
 
+EMAIL_TEMPLATE_MAINTAINER_BASE = """\
+The CI run for the following submission failed without reporting a failed
+test case. The patch submitter was not notified.
+
+Status:     {status}
+Name:       {submission_name}
+Patchwork:  {pw_series_url}
+{body}
+"""
+
 EMAIL_TEMPLATE_MERGE_CONFLICT_BODY = """\
 PR:         {github_pr_url}
 
@@ -212,8 +222,9 @@ def build_email_body_context(
 
 
 def furnish_ci_email_body(
-        config: EmailConfig,
-        ctx: EmailBodyContext,
+    config: EmailConfig,
+    ctx: EmailBodyContext,
+    notify_submitter: bool = True,
 ) -> str:
     """Prepare the body of a BPF CI email according to the provided context"""
     if ctx.status == Status.SUCCESS:
@@ -231,7 +242,10 @@ def furnish_ci_email_body(
         body = template.format(github_pr_url=ctx.github_url)
     logger.info(f"creating email body: status={ctx.status} template={template}")
 
-    template = config.template_base or EMAIL_TEMPLATE_BASE
+    if notify_submitter:
+        template = config.template_base or EMAIL_TEMPLATE_BASE
+    else:
+        template = EMAIL_TEMPLATE_MAINTAINER_BASE
     return template.format(
         status=str(ctx.status.value).upper(),
         submission_name=ctx.submission_name,
@@ -273,6 +287,7 @@ def build_email(
     msg_id: str,
     body: str,
     boundary: str = "",
+    notify_submitter: bool = True,
 ) -> Tuple[List[str], str]:
     """
     Builds complete email (including headers) to be sent along with curl command
@@ -307,8 +322,11 @@ def build_email(
     to_list = copy.copy(config.smtp_to)
     cc_list = copy.copy(config.smtp_cc)
 
-    if config.ignore_allowlist or email_in_submitter_allowlist(
-        series.submitter_email, config.submitter_allowlist
+    if notify_submitter and (
+        config.ignore_allowlist
+        or email_in_submitter_allowlist(
+            series.submitter_email, config.submitter_allowlist
+        )
     ):
         to_list += [series.submitter_email]
 
@@ -345,10 +363,13 @@ async def send_email(
     series: Series,
     subject: str,
     body: str,
+    notify_submitter: bool = True,
 ):
     """Send an email."""
     msg_id = generate_msg_id(config.smtp_host)
-    curl_args, msg = build_email(config, series, subject, msg_id, body)
+    curl_args, msg = build_email(
+        config, series, subject, msg_id, body, notify_submitter=notify_submitter
+    )
 
     proc = await asyncio.create_subprocess_exec(
         *curl_args, stdin=PIPE, stdout=PIPE, stderr=PIPE
@@ -1245,10 +1266,25 @@ class BranchWorker(GithubConnector):
                 return
             if status == Status.SUCCESS and not config.report_success:
                 return
+            notify_submitter = self.log_extractor.notify_submitter(failed_logs)
+            if not notify_submitter and not (email.smtp_to or email.smtp_cc):
+                logger.info(
+                    "No test case failed and no to/cc recipients are configured. "
+                    "Do not send e-mail."
+                )
+                return
             subject = await get_ci_email_subject(series)
             ctx = build_email_body_context(self.repo, pr, status, series, inline_logs)
-            body = furnish_ci_email_body(email, ctx)
-            await send_email(email, series, subject, body)
+            body = furnish_ci_email_body(
+                email, ctx, notify_submitter=notify_submitter
+            )
+            await send_email(
+                email,
+                series,
+                subject,
+                body,
+                notify_submitter=notify_submitter,
+            )
             bump_email_status_counters(status)
 
     def expire_branches(self) -> None:
