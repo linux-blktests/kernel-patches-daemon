@@ -21,19 +21,19 @@
     "stable": [
     ],
     "__DEFAULT__": [
-      "nvme-7.3"
+      "for-next"
     ]
   },
   "branches": {
-    "nvme-7.3": {
+    "for-next": {
       "github_app_auth": {
         "app_id": "TO_SPECIFY",
         "installation_id": TO_SPECIFY,
         "private_key_path": "TO_SPECIFY"
       },
       "repo": "https://github.com/linux-blktests/linux-nvme",
-      "upstream": "git://git.infradead.org/nvme.git",
-      "upstream_branch": "nvme-7.3",
+      "upstream": "https://git.kernel.org/pub/scm/linux/kernel/git/axboe/linux.git",
+      "upstream_branch": "for-next",
       "ci_repo": "https://github.com/linux-blktests/blktests-kpd-ci.git",
       "ci_branch": "linux-nvme"
     }
