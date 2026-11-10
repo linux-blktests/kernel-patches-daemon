@@ -80,6 +80,14 @@ class GithubLogExtractor(ABC):
         """
         raise NotImplementedError
 
+    def notify_submitter(self, logs: Sequence[GithubFailedJobLog]) -> bool:
+        """
+        Given a list of failed job logs, return whether the patch submitter
+        should be notified. Return False when the logs show no failed test
+        case, so that only the configured `to` and `cc` recipients are mailed.
+        """
+        return True
+
     async def _get_session(self) -> aiohttp.ClientSession:
         """Return cached http session; creating if not already created"""
         if not self._session:
@@ -237,6 +245,15 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
     JOB_LOG_BLKTESTS_COMPLETED: Final[str] = "KPD: blktests completed"
     JOB_LOG_FAILURES_START: Final[str] = "KPD: Failures:"
     JOB_LOG_FAILURES_END: Final[str] = "KPD: Failures end"
+    EMAIL_TEXT_NO_FAILED_TESTS: Final[str] = (
+        "\nBlktests completed without failed test cases, so a later CI step failed.\n"
+        "Check the run record for the cause.\n"
+    )
+    EMAIL_TEXT_NOT_COMPLETED: Final[str] = (
+        "\nThe job log does not show that blktests completed, for example because\n"
+        "the kernel build, the VM or the test setup failed. Check the run record\n"
+        "for the cause.\n"
+    )
 
     def __init__(self, certificate_path: str) -> None:
         # Needs to be initialized in async function
@@ -276,7 +293,7 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
         results = await asyncio.gather(*tasks)
         return [result for result in results if result is not None]
 
-    def _parse_out_test_progs_failure(self, log: str) -> str:
+    def _parse_blktests_failures(self, log: str) -> Optional[List[str]]:
         # Avoid keeping a duplicate copy of a possibly large file in-memory
         log_file = io.StringIO(log)
 
@@ -330,9 +347,7 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
             logger.info(f"blktests_completed is not set")
             return None
 
-        if len(failure_log) > 0:
-            return ' '.join(failure_log)
-        return "ALL PASS"
+        return failure_log
 
     def generate_inline_email_text(self, logs: Sequence[GithubFailedJobLog]) -> str:
         """
@@ -343,19 +358,27 @@ class LinuxBlockGithubLogExtractor(GithubLogExtractor):
         if not logs:
             return ""
 
-        # Render first failures found
+        failures = []
+        blktests_completed = False
         for log in logs:
-            failures = self._parse_out_test_progs_failure(log.log)
-            if not failures:
+            log_failures = self._parse_blktests_failures(log.log)
+            if log_failures is None:
                 continue
-            elif failures == "ALL PASS":
-                logger.info(f"LinuxBlockGithubLogExtractor: log ALL PASS")
-                return f"\nAll test cases passed\n"
+            blktests_completed = True
+            failures.extend(log_failures)
 
+        if failures:
             logger.info(f"LinuxBlockGithubLogExtractor: log failures: {failures}")
-            return f"\nFailed test cases: {failures}\n"
+            return f"\nFailed test cases: {' '.join(failures)}\n"
+        if blktests_completed:
+            logger.info("LinuxBlockGithubLogExtractor: no failed test cases")
+            return self.EMAIL_TEXT_NO_FAILED_TESTS
 
-        return None
+        logger.info("LinuxBlockGithubLogExtractor: blktests did not complete")
+        return self.EMAIL_TEXT_NOT_COMPLETED
+
+    def notify_submitter(self, logs: Sequence[GithubFailedJobLog]) -> bool:
+        return any(self._parse_blktests_failures(log.log) for log in logs)
 
 
 # Values accepted by the `log_extractor` config option. The key names the CI
